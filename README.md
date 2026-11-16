@@ -30,10 +30,28 @@ make lint
 make test
 ```
 
-Model work also needs the training group: `uv sync --group training`.
+Model work also needs the training group: `uv sync --group training`
+(PyTorch has no wheel for Intel Macs: train on Apple Silicon or in a Linux container).
 
 Raw data stays out of Git: put `SRV3490.parquet`, `GBG500.parquet` and
 `GBG500_labels.csv` in `data/raw/`.
+
+### Dev stack (Docker Compose)
+
+```sh
+make up      # creates .env from .env.example if missing, builds, waits until healthy
+make logs
+make down    # stops; data is kept in the named volumes
+```
+
+| Service | URL | Credentials (dev only) |
+|---|---|---|
+| MLflow UI | http://localhost:5001 | — |
+| MinIO console | http://localhost:9001 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from `.env` |
+| API (Swagger) | http://localhost:8000/docs | — |
+
+MLflow is on 5001 because macOS uses port 5000 for AirPlay Receiver. Every port can be
+changed in `.env`. Buckets `mlflow` (MLflow artifacts) and `raw` are created automatically.
 
 ## Repository layout
 

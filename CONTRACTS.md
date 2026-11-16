@@ -221,7 +221,7 @@ Read through `gbg_mlops.config.Settings` (`.env` in dev, see `.env.example`).
 
 | Variable | Dev value (compose, from host) | Used by | Meaning |
 |---|---|---|---|
-| `MLFLOW_TRACKING_URI` | `http://localhost:5000` (`http://mlflow:5000` inside compose) | training, API, scripts | MLflow server |
+| `MLFLOW_TRACKING_URI` | `http://localhost:5001` (`http://mlflow:5000` inside compose) | training, API, scripts | MLflow server |
 | `MLFLOW_S3_ENDPOINT_URL` | `http://localhost:9000` (`http://minio:9000` inside compose) | training, API | S3 endpoint for artifacts |
 | `AWS_ACCESS_KEY_ID` | dev value in `.env.example` | training, API | MinIO credentials |
 | `AWS_SECRET_ACCESS_KEY` | dev value in `.env.example` | training, API | MinIO credentials |
@@ -230,6 +230,10 @@ Read through `gbg_mlops.config.Settings` (`.env` in dev, see `.env.example`).
 | `RISK_THRESHOLD` | `0.5` | API | decision threshold on `risk_score`, in `]0, 1[` |
 
 Real credentials never go in Git: `.env` is ignored; CI and Kubernetes use secrets.
+
+Dev host ports (compose only, set in `.env`): MLflow `MLFLOW_PORT=5001` — macOS uses 5000
+for AirPlay Receiver —, MinIO API `9000`, MinIO console `9001`, API `API_PORT=8000`.
+Inside the compose network services keep their own ports (`mlflow:5000`, `minio:9000`).
 
 ## 5. Docker images
 
@@ -240,6 +244,21 @@ Real credentials never go in Git: `.env` is ignored; CI and Kubernetes use secre
 
 Deployments reference the SHA tag (reproducible); `latest` is for local convenience only.
 The API image does not contain the model: it loads `MODEL_NAME@MODEL_ALIAS` at startup.
+
+**Multi-architecture is mandatory.** The team uses both Intel (`amd64`) and Apple Silicon
+(`arm64`) Macs, and each local Kubernetes cluster runs on its own architecture. Published
+images must be built for both:
+
+```sh
+docker buildx build --platform linux/amd64,linux/arm64 -f api/Dockerfile \
+  -t <dockerhub_user>/gbg-api:${GITHUB_SHA} -t <dockerhub_user>/gbg-api:latest --push .
+```
+
+Base images must also exist for both platforms (`python:3.12-slim`, `postgres:16-alpine`
+and the Chainguard MinIO images used in dev do). Third-party images are pinned by digest.
+
+Note: official `minio/minio` and `minio/mc` images are no longer published; the dev stack
+uses MinIO built by Chainguard (`cgr.dev/chainguard/minio`, `cgr.dev/chainguard/minio-client`).
 
 ## 6. Open questions
 
