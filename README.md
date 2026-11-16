@@ -65,7 +65,9 @@ wheel for Intel Macs: train on Apple Silicon or in a Linux container).
 curl -X POST localhost:8000/predict -H "Content-Type: application/json" -d @ride.json
 
 # File: one ride, columns time_index, ax, ay, az, rx, ry, rz (CSV or Parquet)
-curl -X POST localhost:8000/predict/file -F file=@ride.parquet -F units=deg_s
+uv run python scripts/export_ride.py --list Reckless           # ride ids of a GBG500 label
+uv run python scripts/export_ride.py --ride-id <id> --out data/demo/ride.csv
+curl -X POST localhost:8000/predict/file -F file=@data/demo/ride.csv -F units=deg_s
 ```
 
 ```json
