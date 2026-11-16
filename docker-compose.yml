@@ -1,0 +1,115 @@
+# Development stack: Postgres (MLflow backend), MinIO (S3 artifacts), MLflow, API.
+# Usage: `make up` (creates .env from .env.example if missing), `make down`.
+# Ports are bound to 127.0.0.1 only. Inside the network, services use their
+# internal ports (mlflow:5000, minio:9000); host ports are configurable in .env.
+name: gbg-mlops
+
+x-s3-env: &s3-env
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?set it in .env}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?set it in .env}
+  MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set it in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mlflow}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # MinIO server built by Chainguard (official minio/minio images are no longer
+  # published). Multi-arch: works on Intel and Apple Silicon.
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:9158c67aa441627c366442e84656f689e16bec4809851ec64318561a365b69e4
+    command: ["server", "/data", "--console-address", ":9001"]
+    user: "0"  # named volume is root-owned on first start
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:?set it in .env}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:?set it in .env}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot job: create the buckets, then exit 0 (idempotent).
+  minio-init:
+    image: cgr.dev/chainguard/minio-client@sha256:1260ca38acf78bf8d2833845fda6636b27388ab919b750d79f2c7167fb45ec74
+    environment:
+      MC_HOST_local: http://${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}@minio:9000
+    command: ["mb", "--ignore-existing", "local/mlflow", "local/raw"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/mlflow.Dockerfile
+    image: gbg-mlops/mlflow:dev
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mlflow}
+      # Clients write artifacts directly to S3 (MLFLOW_S3_ENDPOINT_URL + AWS keys).
+      - --default-artifact-root=s3://mlflow
+      - --no-serve-artifacts
+      - --allowed-hosts=mlflow,mlflow:5000,localhost,localhost:*,127.0.0.1,127.0.0.1:*
+    environment:
+      <<: *s3-env
+    ports:
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as r; r.urlopen('http://localhost:5000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: gbg-mlops/api:dev
+    environment:
+      <<: *s3-env
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: ${MODEL_NAME:-gbg-risk}
+      MODEL_ALIAS: ${MODEL_ALIAS:-champion}
+      RISK_THRESHOLD: ${RISK_THRESHOLD:-0.5}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    # Liveness only: /health may legitimately answer 503 while no model is loaded.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as r; r.urlopen('http://localhost:8000/openapi.json', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres-data:
+  minio-data:
