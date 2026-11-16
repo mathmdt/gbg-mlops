@@ -29,6 +29,8 @@ from gbg_mlops.features import (
 EXPERIMENT_NAME = "gbg-risk"
 MODEL_ARTIFACT_PATH = "model"
 NORMALIZATION_ARTIFACT = "normalization.json"
+# Run metric compared before promotion: ROC-AUC of Reckless vs all other GBG500 rides.
+EVALUATION_METRIC = "gbg_reckless_auc"
 
 MODEL_SIGNATURE = ModelSignature(
     # Unnamed tensors: pyfunc then passes a plain ndarray (named ones become a dict).
