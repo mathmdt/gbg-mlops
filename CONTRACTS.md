@@ -219,8 +219,17 @@ Same response as `/predict`.
 | Code | Meaning | Body |
 |---|---|---|
 | 200 | prediction done | `PredictResponse` |
+| 413 | uploaded file larger than 20 MB (`/predict/file`) | `{"detail": "File larger than 20 MB"}` |
 | 422 | invalid input (schema, too short/long, irregular time, bad file) | `{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}` — input values are not echoed |
+| 500 | the model broke its contract (wrong number of scores, values outside [0, 1]) | `{"detail": "Prediction failed"}` |
 | 503 | model not ready | `{"detail": "Model not ready"}` |
+
+### Model loading
+
+The API resolves `MODEL_NAME@MODEL_ALIAS` **once at startup**, loads that exact version
+and the `normalization.json` of its run, and checks the input signature `(-1, 6, 300)`.
+Moving the alias therefore needs an API restart to take effect (`make reload-api` in dev,
+a rollout in Kubernetes). `/health` reports the version actually served.
 
 ## 4. Environment variables
 

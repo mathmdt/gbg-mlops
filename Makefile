@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 UV ?= uv
 
-.PHONY: help install lint format test env up down logs dummy-model api
+.PHONY: help install lint format test env up down logs dummy-model reload-api api
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -36,8 +36,14 @@ down: ## Stop the dev stack (volumes are kept)
 logs: ## Follow the logs of the dev stack
 	docker compose logs -f --tail=100
 
-dummy-model: ## Register the placeholder model as gbg-risk@champion
+dummy-model: ## Register the placeholder model as gbg-risk@champion, then reload the API
 	$(UV) run python scripts/register_dummy_model.py
+	@$(MAKE) --no-print-directory reload-api
+
+reload-api: ## Restart the compose API so it loads the current champion
+	@if docker compose ps --status running --services 2>/dev/null | grep -qx api; then \
+		docker compose restart api && docker compose up -d --wait api; \
+	else echo "API container not running: skipped"; fi
 
 api: ## Run the API locally with auto-reload on http://localhost:8000
 	$(UV) run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
