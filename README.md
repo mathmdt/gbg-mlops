@@ -50,6 +50,12 @@ make down    # stops; data is kept in the named volumes
 | MinIO console | http://localhost:9001 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from `.env` |
 | API (Swagger) | http://localhost:8000/docs | — |
 
+Register the placeholder model `gbg-risk@champion` (needs the stack up; rerun = new version):
+
+```sh
+make dummy-model
+```
+
 MLflow is on 5001 because macOS uses port 5000 for AirPlay Receiver. Every port can be
 changed in `.env`. Buckets `mlflow` (MLflow artifacts) and `raw` are created automatically.
 

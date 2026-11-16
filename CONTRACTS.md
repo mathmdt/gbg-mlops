@@ -137,7 +137,14 @@ signature = ModelSignature(
 )
 ```
 
+- Use the constants of `gbg_mlops.model_loader` (`EXPERIMENT_NAME`, `MODEL_SIGNATURE`,
+  `NORMALIZATION_ARTIFACT`, `MODEL_ARTIFACT_PATH = "model"`) rather than retyping them.
+  Tensors are **unnamed**: with a named tensor, pyfunc passes a dict instead of an array.
 - The model does **not** normalise: the caller applies `normalization.json` first.
+- Placeholder: `make dummy-model` registers a constant model (0.05 per window) tagged
+  `model_type=dummy`. It takes `champion` only if there is none or if the current one is
+  also a dummy, so it never replaces a real model (`--force-champion` to override).
+  Real models should set the tag `model_type` (e.g. `cnn1d`).
 - **Ride score** = maximum of its window scores (`aggregate_ride_score`), the same in
   evaluation and in the API.
 - Promotion: a new version is registered without moving `champion`; moving the alias is
