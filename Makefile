@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 UV ?= uv
 
-.PHONY: help install lint format test env up down logs dummy-model reload-api api
+.PHONY: help install lint format test env up down logs dummy-model promote rollback reload-api api
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -38,6 +38,15 @@ logs: ## Follow the logs of the dev stack
 
 dummy-model: ## Register the placeholder model as gbg-risk@champion, then reload the API
 	$(UV) run python scripts/register_dummy_model.py
+	@$(MAKE) --no-print-directory reload-api
+
+promote: ## Promote VERSION=N to champion if its GBG500 metric is better (FORCE=1 to skip), reload the API
+	@test -n "$(VERSION)" || (echo "usage: make promote VERSION=N [FORCE=1]" && exit 1)
+	$(UV) run python scripts/promote_model.py --candidate-version $(VERSION) $(if $(FORCE),--force)
+	@$(MAKE) --no-print-directory reload-api
+
+rollback: ## Move champion back to the previous version, reload the API
+	$(UV) run python scripts/promote_model.py --rollback
 	@$(MAKE) --no-print-directory reload-api
 
 reload-api: ## Restart the compose API so it loads the current champion
