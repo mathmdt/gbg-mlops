@@ -147,10 +147,19 @@ signature = ModelSignature(
   Real models should set the tag `model_type` (e.g. `cnn1d`).
 - **Ride score** = maximum of its window scores (`aggregate_ride_score`), the same in
   evaluation and in the API.
-- Promotion: a new version is registered without moving `champion`; moving the alias is
-  an explicit, reviewed step (the previous champion stays available for rollback).
-- Recommended tags on the version: `git_commit`, `data_split` (hash of `split.json`),
-  and evaluation metrics on GBG500 as run metrics.
+- **Evaluation metric** (mandatory for promotion): `gbg_reckless_auc`, logged on the run
+  with `mlflow.log_metric("gbg_reckless_auc", value)` = ROC-AUC on GBG500 of *Reckless*
+  (positive) against all other rides, using the ride score above. Constant:
+  `gbg_mlops.model_loader.EVALUATION_METRIC`. Other metrics are welcome as extra run metrics.
+- **Promotion**: training registers new versions **without** moving `champion`.
+  `scripts/promote_model.py` (`make promote VERSION=N`) moves it only if the candidate's
+  `gbg_reckless_auc` is strictly greater than the champion's (or if there is no champion,
+  or the champion has no metric, e.g. the dummy). Otherwise it exits with code 2 and the
+  champion is kept. `--force` skips the comparison; `--rollback` (`make rollback`) returns
+  to the version recorded in the champion's `previous_champion` tag.
+- Tags written by promotion: `promoted_at`, `previous_champion` on the promoted version,
+  `rolled_back_at` on a version removed by a rollback. See `docs/model-promotion.md`.
+- Recommended tags on the version: `git_commit`, `data_split` (hash of `split.json`).
 
 ## 3. HTTP API
 

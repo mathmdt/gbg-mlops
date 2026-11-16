@@ -87,13 +87,14 @@ fixées dans [`CONTRACTS.md`](CONTRACTS.md) et un modèle factice est déjà ser
 | Qui | Dossier | Ce que tu peux faire dès maintenant | S'appuyer sur |
 |---|---|---|---|
 | **Lucas** | `pipelines/` | Lire les parquet avec DuckDB par lots, produire `data/processed/{train,val,test,gbg_eval}.npz`, `normalization.json` et `split.json` (découpage par `group_id`), puis le DAG (Airflow ou Prefect). | `features.py` : `clean_ride`, `to_rad_s`, `make_windows`, `window_labels`, `Normalization.fit`. Attention au piège `fetchnumpy()` (contrat, section 0). |
-| **Ariane** | `training/` | CNN 1D PyTorch sur `(n, 6, 300)`, tracking dans l'expérience `gbg-risk`, enregistrement dans `gbg-risk` avec `MODEL_SIGNATURE` et `normalization.json`, évaluation sur GBG500 (score du trajet = max des fenêtres). En attendant les `.npz`, générer des tableaux factices de la bonne forme. | `model_loader.py` (constantes), `scripts/register_dummy_model.py` (exemple complet d'enregistrement), contrat section 2. Tag `model_type=cnn1d` pour que le modèle factice ne le remplace jamais. |
+| **Ariane** | `training/` | CNN 1D PyTorch sur `(n, 6, 300)`, tracking dans l'expérience `gbg-risk`, enregistrement dans `gbg-risk` avec `MODEL_SIGNATURE` et `normalization.json`, évaluation sur GBG500 (score du trajet = max des fenêtres) loggée en `gbg_reckless_auc`, obligatoire pour la promotion. En attendant les `.npz`, générer des tableaux factices de la bonne forme. | `model_loader.py` (constantes), `scripts/register_dummy_model.py` (exemple complet d'enregistrement), contrat section 2. Tag `model_type=cnn1d` pour que le modèle factice ne le remplace jamais. |
 | **Emma** | `infra/`, `api/Dockerfile` | Optimiser l'image de l'API (multi-stage, taille), build multi-architecture `amd64` + `arm64` vers Docker Hub, manifestes Kubernetes / Helm pour Docker Desktop (Deployment, Service, Secrets, sondes sur `/health`). | `docker-compose.yml` (variables et dépendances), contrat sections 4 et 5. Ton Mac est Intel : les images doivent aussi tourner en `arm64` pour les autres. |
 | **Laura** | `.github/workflows/`, `app/`, `tests/e2e/` | CI sur les PR (`make lint`, `make test`), build et push des images (SHA + `latest`) via le runner auto-hébergé ; web app qui appelle `/health` et `/predict/file` ; tests e2e marqués `@pytest.mark.e2e` contre `make up` + `make dummy-model`. | Swagger sur `/docs`, contrat section 3. Les tests e2e sont exclus de `make test` (`-m "not e2e"`). |
 | **Mathilde** | `api/`, `src/gbg_mlops/`, `scripts/` | Relectures des PR, évolutions du contrat, intégration du vrai modèle dès qu'Ariane l'enregistre. | — |
 
-Raccourcis utiles : `make help` liste toutes les commandes ; `make reload-api` fait
-recharger le `champion` actuel par l'API après une promotion.
+Raccourcis utiles : `make help` liste toutes les commandes ; `make promote VERSION=N`
+met une version en production seulement si elle est meilleure, `make rollback` revient
+à la précédente (voir [`docs/model-promotion.md`](docs/model-promotion.md)).
 
 ## Repository layout
 
