@@ -1,0 +1,16 @@
+# Each folder has an owner who is requested for review automatically.
+# Replace the placeholders with real GitHub logins, then uncomment the lines.
+# Until then, every change is owned by the repository maintainer.
+* @mathmdt
+
+# /src/gbg_mlops/     @mathmdt
+# /api/               @mathmdt
+# /scripts/           @mathmdt
+# /CONTRACTS.md       @mathmdt
+# /docker-compose.yml @mathmdt
+# /pipelines/         @LUCAS_GITHUB_LOGIN
+# /training/          @ARIANE_GITHUB_LOGIN
+# /infra/             @EMMA_GITHUB_LOGIN
+# /.github/workflows/ @LAURA_GITHUB_LOGIN
+# /app/               @LAURA_GITHUB_LOGIN
+# /tests/e2e/         @LAURA_GITHUB_LOGIN
