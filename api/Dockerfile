@@ -14,10 +14,11 @@ WORKDIR /app
 
 # Dependencies first (cached layer), then the project itself.
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-default-groups --group api --no-install-project
+RUN uv sync --frozen --no-default-groups --group api --group training --no-install-project
 COPY src ./src
 COPY api ./api
-RUN uv sync --frozen --no-default-groups --group api --no-editable
+COPY training ./training
+RUN uv sync --frozen --no-default-groups --group api --group training --no-editable
 
 RUN useradd --create-home --uid 10001 app
 USER app

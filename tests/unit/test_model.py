@@ -7,12 +7,18 @@ Validates the mandatory contract:
 
 from __future__ import annotations
 
+import importlib.util
+
 import numpy as np
 import pytest
 
 from gbg_mlops.features import CHANNELS, WINDOW, Normalization
 from gbg_mlops.model_loader import LoadedModel
 from training.model import RiskCNN1D, RiskPyfuncWrapper
+
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="torch is not installed"
+)
 
 
 @pytest.mark.parametrize("n", [1, 2, 7, 19, 64, 100])

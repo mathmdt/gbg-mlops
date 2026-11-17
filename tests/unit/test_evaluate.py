@@ -1,5 +1,9 @@
 """Unit and integration tests for GBG500 evaluation (training/evaluate.py)."""
 
+from __future__ import annotations
+
+import importlib.util
+
 import mlflow
 import numpy as np
 import pytest
@@ -7,6 +11,10 @@ import pytest
 from gbg_mlops.model_loader import EVALUATION_METRIC
 from training.evaluate import evaluate_gbg500, log_to_mlflow
 from training.model import RiskCNN1D
+
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("torch") is None, reason="torch is not installed"
+)
 
 
 @pytest.fixture
