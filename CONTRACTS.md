@@ -71,6 +71,9 @@ also regenerates the processed data and retrains the model.
   (`crash_ride_id` for baselines, `ride_id` for the crash ride).
 - Split **by group, never by window**: 70 % train / 15 % val / 15 % test of the 698 groups,
   seed `42`. The list of groups per split is saved in `data/processed/split.json`.
+- Every group holds exactly one crash ride, so each split has the same share of fall rides;
+  the split is also stratified on the 35 crash rides with several `topple` points.
+- `make data-sample` writes the same files for 50 groups only in `data/processed/sample/`.
 
 ### Files
 

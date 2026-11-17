@@ -1,4 +1,5 @@
-# Development stack: Postgres (MLflow backend), MinIO (S3 artifacts), MLflow, API.
+# Development stack: Postgres (MLflow backend), MinIO (S3 artifacts), MLflow, API,
+# Prefect (orchestrator of the data → model DAG).
 # Usage: `make up` (creates .env from .env.example if missing), `make down`.
 # Ports are bound to 127.0.0.1 only. Inside the network, services use their
 # internal ports (mlflow:5000, minio:9000); host ports are configurable in .env.
@@ -110,6 +111,25 @@ services:
       retries: 10
       start_period: 10s
 
+  # Prefect server: UI and API of the DAG in pipelines/dag.py. The flow itself runs on
+  # the host (`make dag`: it needs data/raw and the training dependencies) and reports here.
+  prefect:
+    image: prefecthq/prefect:3.8.8-python3.12@sha256:57e02b3f63d663e02b06d4127362ea48d92d4b361fbd96c8ba8f01e5702755f4
+    command: ["prefect", "server", "start", "--host", "0.0.0.0"]
+    environment:
+      PREFECT_UI_API_URL: http://localhost:${PREFECT_PORT:-4200}/api
+    ports:
+      - "127.0.0.1:${PREFECT_PORT:-4200}:4200"
+    volumes:
+      - prefect-data:/root/.prefect
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as r; r.urlopen('http://localhost:4200/api/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
 volumes:
   postgres-data:
   minio-data:
+  prefect-data:

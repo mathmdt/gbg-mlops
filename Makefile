@@ -1,8 +1,10 @@
 # Common developer commands. Run `make help` for the list.
 .DEFAULT_GOAL := help
 UV ?= uv
+PREFECT_PORT ?= $(or $(shell grep -E '^PREFECT_PORT=' .env 2>/dev/null | cut -d= -f2),4200)
 
-.PHONY: help install lint format test env up down logs dummy-model promote rollback reload-api api
+.PHONY: help install lint format test env up down logs dummy-model promote rollback reload-api api \
+	ingest data data-sample dag
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -29,6 +31,7 @@ up: env ## Start the dev stack (Postgres, MinIO, MLflow, API) and wait until hea
 	@echo "MLflow         http://localhost:$${MLFLOW_PORT:-$$(grep -E '^MLFLOW_PORT=' .env | cut -d= -f2)}"
 	@echo "MinIO console  http://localhost:$${MINIO_CONSOLE_PORT:-$$(grep -E '^MINIO_CONSOLE_PORT=' .env | cut -d= -f2)}"
 	@echo "API docs       http://localhost:$${API_PORT:-$$(grep -E '^API_PORT=' .env | cut -d= -f2)}/docs"
+	@echo "Prefect UI     http://localhost:$(PREFECT_PORT)"
 
 down: ## Stop the dev stack (volumes are kept)
 	docker compose down
@@ -56,3 +59,16 @@ reload-api: ## Restart the compose API so it loads the current champion
 
 api: ## Run the API locally with auto-reload on http://localhost:8000
 	$(UV) run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+ingest: ## Upload data/raw/* to the MinIO bucket raw with their SHA-256 (needs `make up`)
+	$(UV) run python -m pipelines.ingest
+
+data: ## Rebuild data/processed/ (windows, split, normalisation) from data/raw/
+	$(UV) run python -m pipelines.prepare
+
+data-sample: ## Same on 50 groups only, in data/processed/sample/
+	$(UV) run python -m pipelines.prepare --sample-groups 50 --out data/processed/sample
+
+dag: ## Run the DAG ingest → prepare → train → evaluate → promote (Prefect UI)
+	PREFECT_API_URL=http://localhost:$(PREFECT_PORT)/api \
+		$(UV) run --group pipelines --group training python -m pipelines.dag

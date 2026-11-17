@@ -47,11 +47,27 @@ curl localhost:8000/health
 make down           # stops the stack; data is kept in named volumes
 ```
 
+### Data pipeline
+
+```sh
+make data           # data/raw/ → data/processed/{train,val,test,gbg_eval}.npz, normalization.json, split.json
+make data-sample    # same on 50 groups, in data/processed/sample/ (quick start for training)
+make ingest         # data/raw/* → MinIO bucket raw, each object tagged with its SHA-256
+make dag            # Prefect DAG: ingest → prepare → train → evaluate → promote (needs make up)
+```
+
+`make data` reads SRV3490 city by city with DuckDB, cleans and windows each ride with
+`features.py`, splits by group (a crash ride + its 4 baselines, 70/15/15, seed 42) and fits
+the normalisation on train only. The DAG runs on the host and reports to the Prefect
+server of the compose stack; until `training/train.py` exists it skips the training,
+evaluation and promotion steps with a warning.
+
 | Service | URL | Credentials (dev only) |
 |---|---|---|
 | API (Swagger) | http://localhost:8000/docs | — |
 | MLflow UI | http://localhost:5001 | — |
 | MinIO console | http://localhost:9001 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from `.env` |
+| Prefect UI (DAG) | http://localhost:4200 | — |
 
 MLflow is on 5001 because macOS uses port 5000 for AirPlay Receiver. Every host port can
 be changed in `.env` (e.g. `API_PORT=8002` if 8000 is busy). Buckets `mlflow` and `raw` are
@@ -102,7 +118,7 @@ met une version en production seulement si elle est meilleure, `make rollback` r
 |---|---|---|
 | `src/gbg_mlops/` | Shared package: settings, preprocessing, API schemas, model loading | Mathilde (features: Lucas) |
 | `api/` | FastAPI application and its Dockerfile | Mathilde (Dockerfile: Emma) |
-| `pipelines/` | Ingestion and DAG | Lucas |
+| `pipelines/` | Ingestion (`ingest.py`), preparation (`prepare.py`), Prefect DAG (`dag.py`) | Lucas |
 | `training/` | Model training and evaluation | Ariane |
 | `infra/k8s/` | Kubernetes manifests / Helm | Emma |
 | `app/` | Test web app | Laura |
