@@ -463,9 +463,13 @@ def train_model(
         # Step 7: Register model as PyFunc in Model Registry
         if register_model and active_mlflow_run:
             print(f"Registering model in MLflow Registry as '{settings.model_name}'...")
+            import copy
+
+            cpu_model = copy.deepcopy(model).to("cpu")
+            cpu_model.eval()
             info = mlflow.pyfunc.log_model(
                 name=MODEL_ARTIFACT_PATH,
-                python_model=RiskPyfuncWrapper(model),
+                python_model=RiskPyfuncWrapper(cpu_model),
                 signature=MODEL_SIGNATURE,
                 input_example=np.zeros((1, len(CHANNELS), WINDOW), dtype=np.float32),
                 registered_model_name=settings.model_name,

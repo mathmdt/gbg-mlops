@@ -93,7 +93,13 @@ class RiskPyfuncWrapper(mlflow.pyfunc.PythonModel):
     """MLflow PyFunc wrapper conforming to CONTRACTS.md Section 2."""
 
     def __init__(self, model: RiskCNN1D | None = None) -> None:
-        self.model = model
+        if model is not None:
+            import copy
+
+            self.model = copy.deepcopy(model).to("cpu")
+            self.model.eval()
+        else:
+            self.model = None
 
     def load_context(self, context: mlflow.pyfunc.PythonModelContext) -> None:
         """Load PyTorch weights from the MLflow artifact directory if artifacts are present."""
