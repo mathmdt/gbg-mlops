@@ -19,6 +19,9 @@ dist/
 
 # Data, models and local outputs (never committed)
 data/
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
 mlruns/
 mlartifacts/
 *.parquet

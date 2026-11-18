@@ -4,7 +4,7 @@ UV ?= uv
 PREFECT_PORT ?= $(or $(shell grep -E '^PREFECT_PORT=' .env 2>/dev/null | cut -d= -f2),4200)
 
 .PHONY: help install lint format test env up down logs dummy-model promote rollback reload-api api \
-	ingest data data-sample dag
+	ingest data data-sample dag train compare-runs
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -68,6 +68,12 @@ data: ## Rebuild data/processed/ (windows, split, normalisation) from data/raw/
 
 data-sample: ## Same on 50 groups only, in data/processed/sample/
 	$(UV) run python -m pipelines.prepare --sample-groups 50 --out data/processed/sample
+
+train: ## Train the 1D CNN model using training/train.py
+	$(UV) run --group training python -m training.train
+
+compare-runs: ## Run and compare 3 model variations in MLflow (step 8)
+	$(UV) run --group training python scripts/compare_runs.py
 
 dag: ## Run the DAG ingest → prepare → train → evaluate → promote (Prefect UI)
 	PREFECT_API_URL=http://localhost:$(PREFECT_PORT)/api \

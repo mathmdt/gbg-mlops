@@ -16,12 +16,12 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-default-groups --group api --no-install-project
+    uv sync --frozen --no-default-groups --group api --group training --no-install-project
 
 COPY src ./src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-default-groups --group api --no-editable
+    uv sync --frozen --no-default-groups --group api --group training --no-editable
 
 # Run the API without the installation tools.
 FROM base AS runtime
