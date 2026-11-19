@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.client import UNITS, ApiError, get_health, predict_file  # noqa: E402
 from app.route import route_map_html, simulated_route  # noqa: E402
+from app.session import current, store, upload_key  # noqa: E402
 
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
 SAFE, WARNING, DANGER = "#34d399", "#fbbf24", "#f43f5e"
@@ -243,17 +244,20 @@ with right:
             unsafe_allow_html=True,
         )
 
+key = upload_key(uploaded)
 if clicked:
     try:
         with httpx.Client(base_url=API_URL, timeout=60) as client:
-            st.session_state.result = predict_file(
+            prediction = predict_file(
                 client, uploaded.name, uploaded.getvalue(), units, ride_id or None
             )
+        store(st.session_state, key, prediction)
     except ApiError as error:
-        st.session_state.result = None
+        store(st.session_state, key, None)
         st.error(str(error), icon=":material/error:")
 
-result = st.session_state.get("result")
+# Only the verdict of the file currently uploaded: a new file hides the previous one.
+result = current(st.session_state, key)
 if result:
     st.markdown('<p class="step"><span>03</span>Verdict</p>', unsafe_allow_html=True)
     gauge_column, cards_column = st.columns([5, 7], gap="large")
