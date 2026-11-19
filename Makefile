@@ -3,7 +3,7 @@
 UV ?= uv
 PREFECT_PORT ?= $(or $(shell grep -E '^PREFECT_PORT=' .env 2>/dev/null | cut -d= -f2),4200)
 
-.PHONY: help install lint format test env up down logs dummy-model promote rollback reload-api api \
+.PHONY: help install lint format test e2e env up down logs dummy-model promote rollback reload-api api \
 	ingest data data-sample dag train compare-runs
 
 help: ## Show available commands
@@ -22,6 +22,9 @@ format: ## Auto-fix lint issues and format the code
 
 test: ## Run unit and integration tests (e2e excluded)
 	$(UV) run pytest -m "not e2e"
+
+e2e: ## Run end-to-end tests against a running API (API_URL, default http://localhost:8000)
+	$(UV) run pytest -m e2e tests/e2e
 
 env: ## Create .env from .env.example if it does not exist
 	@test -f .env || (cp .env.example .env && echo "Created .env from .env.example")
