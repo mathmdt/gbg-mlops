@@ -24,6 +24,8 @@ notebooks/
 .ipynb_checkpoints/
 mlruns/
 mlartifacts/
+exported_model*
+exported_champion/
 *.parquet
 *.npz
 *.pt
