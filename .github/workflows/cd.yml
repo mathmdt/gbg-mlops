@@ -1,0 +1,117 @@
+# Continuous deployment: on every push to main (i.e. every merged PR), publish the
+# images to Docker Hub, then deploy the API and the web app on the Kubernetes of the demo machine
+# through a self-hosted runner, and check it with the end-to-end tests.
+#
+# Needs: secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN, and a self-hosted runner on the
+# demo machine (Docker Desktop Kubernetes, namespace gbg-mlops, see infra/k8s/README.md
+# and docs/runner.md).
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deployment at a time; a newer one waits instead of cancelling a rollout halfway.
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/gbg-api
+  APP_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/gbg-app
+
+jobs:
+  publish:
+    name: Publish images to Docker Hub
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      # QEMU lets the amd64 runner also build arm64 images (Apple Silicon Macs).
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push the API image (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+            ${{ env.API_IMAGE }}:latest
+          cache-from: type=gha,scope=gbg-api
+          cache-to: type=gha,mode=max,scope=gbg-api
+
+      - name: Build and push the web app image (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.APP_IMAGE }}:${{ github.sha }}
+            ${{ env.APP_IMAGE }}:latest
+          cache-from: type=gha,scope=gbg-app
+          cache-to: type=gha,mode=max,scope=gbg-app
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: publish
+    # Runs on the demo machine: GitHub's servers cannot reach its local Kubernetes.
+    runs-on: self-hosted
+    timeout-minutes: 20
+    env:
+      KUBE: kubectl --context docker-desktop --namespace gbg-mlops
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Deploy the new API and web app images
+        run: |
+          $KUBE set image deployment/api api="$API_IMAGE:$GITHUB_SHA"
+          $KUBE set image deployment/app app="$APP_IMAGE:$GITHUB_SHA"
+          $KUBE rollout status deployment/api --timeout=300s
+          $KUBE rollout status deployment/app --timeout=300s
+
+      - name: End-to-end tests against the deployed API
+        run: |
+          $KUBE port-forward service/api 18000:8000 > port-forward.log 2>&1 &
+          echo $! > port-forward.pid
+          sleep 5
+          API_URL=http://localhost:18000 uv run --no-project \
+            --with pytest --with httpx --with pandas --with numpy \
+            pytest -m e2e tests/e2e
+
+      - name: Stop the port-forward
+        if: always()
+        run: kill "$(cat port-forward.pid)" 2>/dev/null || true
+
+      # If the rollout or the end-to-end tests fail, go back to the previous version.
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          $KUBE rollout undo deployment/api
+          $KUBE rollout undo deployment/app
+          $KUBE rollout status deployment/api --timeout=300s
+          $KUBE rollout status deployment/app --timeout=300s
