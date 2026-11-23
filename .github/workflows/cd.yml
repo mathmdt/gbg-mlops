@@ -75,6 +75,9 @@ jobs:
   deploy:
     name: Deploy to Kubernetes
     needs: publish
+    # Off until the self-hosted runner is installed: then set the repository variable
+    # DEPLOY_ENABLED to true (Settings > Secrets and variables > Actions > Variables).
+    if: vars.DEPLOY_ENABLED == 'true'
     # Runs on the demo machine: GitHub's servers cannot reach its local Kubernetes.
     runs-on: self-hosted
     timeout-minutes: 20

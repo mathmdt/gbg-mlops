@@ -54,6 +54,13 @@ Le runner ne travaille que tant que ce terminal est ouvert et l'ordinateur allum
 démo, le lancer avant l'oral. Pour qu'il démarre tout seul : `./svc.sh install` puis
 `./svc.sh start`.
 
+## Activer le déploiement (une fois le runner installé)
+
+Tant que le runner n'est pas installé, le CD publie seulement les images : le job
+`deploy` est désactivé pour ne pas rester bloqué en attente d'une machine. Pour
+l'activer : **Settings → Secrets and variables → Actions → onglet Variables → New
+repository variable**, nom `DEPLOY_ENABLED`, valeur `true`.
+
 ## Vérifier
 
 - **Settings → Actions → Runners** : le runner apparaît avec l'état **Idle**.
