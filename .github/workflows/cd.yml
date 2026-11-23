@@ -1,0 +1,146 @@
+# Continuous deployment: once the CI has passed on main (i.e. after every merged PR),
+# publish the images to Docker Hub, then deploy the API and the web app on the Kubernetes
+# of the demo machine through a self-hosted runner, and check both with end-to-end tests.
+#
+# Needs: secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN; for the deploy job, a self-hosted
+# runner on the demo machine and the repository variable DEPLOY_ENABLED=true
+# (see docs/runner.md and infra/k8s/README.md).
+name: CD
+
+on:
+  # Runs only after the CI workflow has finished on main, and only if it succeeded.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deployment at a time; a newer one waits instead of cancelling a rollout halfway.
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  API_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/gbg-api
+  APP_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/gbg-app
+  # The commit the CI has tested (for a manual run: the commit it was started on).
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  publish:
+    name: Publish images to Docker Hub
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Get the code tested by the CI
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      # QEMU lets the amd64 runner also build arm64 images (Apple Silicon Macs).
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push the API image (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:${{ env.SHA }}
+            ${{ env.API_IMAGE }}:latest
+          cache-from: type=gha,scope=gbg-api
+          cache-to: type=gha,mode=max,scope=gbg-api
+
+      - name: Build and push the web app image (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.APP_IMAGE }}:${{ env.SHA }}
+            ${{ env.APP_IMAGE }}:latest
+          cache-from: type=gha,scope=gbg-app
+          cache-to: type=gha,mode=max,scope=gbg-app
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: publish
+    # Off until the self-hosted runner is installed: then set the repository variable
+    # DEPLOY_ENABLED to true (Settings > Secrets and variables > Actions > Variables).
+    if: vars.DEPLOY_ENABLED == 'true'
+    # Runs on the demo machine: GitHub's servers cannot reach its local Kubernetes.
+    runs-on: self-hosted
+    timeout-minutes: 20
+    env:
+      KUBE: kubectl --context docker-desktop --namespace gbg-mlops
+    steps:
+      - name: Get the code tested by the CI
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      # Remember what is running now, to restore exactly that if anything fails.
+      - name: Record the images currently deployed
+        run: |
+          echo "PREVIOUS_API=$($KUBE get deployment/api -o jsonpath='{.spec.template.spec.containers[0].image}')" >> "$GITHUB_ENV"
+          echo "PREVIOUS_APP=$($KUBE get deployment/app -o jsonpath='{.spec.template.spec.containers[0].image}')" >> "$GITHUB_ENV"
+
+      - name: Deploy the new API and web app images
+        run: |
+          $KUBE set image deployment/api api="$API_IMAGE:$SHA"
+          echo "API_CHANGED=true" >> "$GITHUB_ENV"
+          $KUBE set image deployment/app app="$APP_IMAGE:$SHA"
+          echo "APP_CHANGED=true" >> "$GITHUB_ENV"
+          $KUBE rollout status deployment/api --timeout=300s
+          $KUBE rollout status deployment/app --timeout=300s
+
+      - name: End-to-end tests against the deployed API and web app
+        run: |
+          $KUBE port-forward service/api 18000:8000 > port-forward-api.log 2>&1 &
+          echo $! > port-forward.pids
+          $KUBE port-forward service/app 18501:8501 > port-forward-app.log 2>&1 &
+          echo $! >> port-forward.pids
+          sleep 5
+          API_URL=http://localhost:18000 uv run --no-project \
+            --with pytest --with httpx --with pandas --with numpy \
+            pytest -m e2e tests/e2e
+          curl --fail --silent --show-error --max-time 15 http://localhost:18501/_stcore/health
+          echo " <- web app health"
+
+      - name: Stop the port-forwards
+        if: always()
+        run: xargs kill < port-forward.pids 2>/dev/null || true
+
+      # Restore the recorded images, and only on the Deployments this run has changed.
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          if [ "$API_CHANGED" = true ] && [ -n "$PREVIOUS_API" ]; then
+            $KUBE set image deployment/api api="$PREVIOUS_API"
+            $KUBE rollout status deployment/api --timeout=300s
+          fi
+          if [ "$APP_CHANGED" = true ] && [ -n "$PREVIOUS_APP" ]; then
+            $KUBE set image deployment/app app="$PREVIOUS_APP"
+            $KUBE rollout status deployment/app --timeout=300s
+          fi
