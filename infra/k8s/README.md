@@ -107,6 +107,32 @@ POST /predict exige au moins 300 mesures espacées de 100 ms et le champ units.
 Les port-forwards servent aux accès depuis le Mac.
 Les services communiquent entre eux directement dans Kubernetes.
 
+## Déployer et consulter la web app
+
+La web app (Streamlit) appelle l'API par son Service, `http://api:8000`.
+
+```bash
+kubectl --context docker-desktop apply -f infra/k8s/app.yaml
+kubectl --context docker-desktop -n gbg-mlops rollout status deployment/app --timeout=300s
+```
+
+Dans un terminal dédié :
+
+```bash
+kubectl --context docker-desktop -n gbg-mlops port-forward service/app 8502:8501
+```
+
+Ouvrir http://localhost:8502 : la pastille en haut à droite indique la version du
+modèle servie par l'API.
+
+L'image `emmaneum/gbg-app` est publiée par le CD (`.github/workflows/cd.yml`), qui
+met aussi à jour le Deployment avec le tag du commit. Avant la première publication,
+construire l'image en local sous ce nom :
+
+```bash
+docker build -f app/Dockerfile -t emmaneum/gbg-app:latest .
+```
+
 ## Modèle réel
 
 Enregistrer le CNN et ses artefacts dans ce registre MLflow, puis promouvoir
@@ -141,7 +167,7 @@ du Pod, puis appliquer mlflow.yaml pour relancer une instance.
 
 ```bash
 kubectl --context docker-desktop -n gbg-mlops scale \
-  deployment/api deployment/mlflow deployment/minio deployment/postgres --replicas=0
+  deployment/app deployment/api deployment/mlflow deployment/minio deployment/postgres --replicas=0
 ```
 
 Les volumes sont conservés. Arrêter les port-forwards avec Ctrl+C.
@@ -156,4 +182,4 @@ Supprimer le namespace ou les PVC peut supprimer les données persistantes.
 - POST /predict : HTTP 200, score proche de 0,05, une fenêtre
 
 Le vrai CNN et l'exécution sur Apple Silicon restent à vérifier.
-Prefect et la web app ne sont pas inclus dans ce déploiement.
+Prefect n'est pas inclus dans ce déploiement.
