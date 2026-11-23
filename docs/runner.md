@@ -1,7 +1,7 @@
 # Runner auto-hébergé et déploiement continu (CD)
 
-Le workflow [`.github/workflows/cd.yml`](../.github/workflows/cd.yml) se lance à chaque
-push sur `main`, donc à chaque PR fusionnée :
+Le workflow [`.github/workflows/cd.yml`](../.github/workflows/cd.yml) se lance après chaque
+CI réussi sur `main`, donc après chaque PR fusionnée dont les tests passent :
 
 1. **publish** (serveurs GitHub) : construit les images `gbg-api` et `gbg-app` pour
    `amd64` et `arm64`, et les publie sur Docker Hub avec deux tags, le SHA du commit et
@@ -9,8 +9,10 @@ push sur `main`, donc à chaque PR fusionnée :
 2. **deploy** (runner auto-hébergé, sur la machine de démo) :
    - met à jour les Deployments `api` et `app` du namespace `gbg-mlops` avec les images du commit ;
    - attend la fin du déploiement (`rollout status`) ;
-   - lance les tests de bout en bout (`tests/e2e`) contre l'API déployée ;
-   - en cas d'échec, revient à la version précédente (`rollout undo`).
+   - lance les tests de bout en bout (`tests/e2e`) contre l'API déployée et vérifie que
+     la web app répond (`/_stcore/health`) ;
+   - en cas d'échec, remet les images qui tournaient avant, seulement sur les
+     Deployments que ce déploiement a modifiés.
 
 ## Pourquoi un runner auto-hébergé
 
