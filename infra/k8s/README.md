@@ -175,11 +175,30 @@ Supprimer le namespace ou les PVC peut supprimer les données persistantes.
 
 ## Validation effectuée sur Intel
 
-- PostgreSQL, MinIO, MLflow et API : Ready, sans redémarrage au contrôle final
-- Volumes PostgreSQL et MinIO : Bound
-- Modèle factice version 1 enregistré avec l'alias champion
-- GET /health : ready, version 1
-- POST /predict : HTTP 200, score proche de 0,05, une fenêtre
+Validation de l'application et du CNN dans Kubernetes Docker Desktop
+sur Mac Intel, le 23 novembre 2026.
 
-Le vrai CNN et l'exécution sur Apple Silicon restent à vérifier.
+- Image API : emmaneum/gbg-api:dd41f11
+- Image web app construite localement : emmaneum/gbg-app:latest
+- CNN importé dans MLflow : gbg-risk, version locale 2, alias champion
+- GET /health : ready, version 2
+- Application accessible sur http://localhost:8502
+
+Prédictions depuis l'application, avec units=deg_s :
+
+| Fichier | Score affiché | Score de référence d'Ariane | Verdict | Fenêtres |
+|---|---|---|---|---|
+| safe.csv | 0,188 | 0,1883 | Non dangereux | 13 |
+| reckless.csv | 0,948 | 0,9481 | Dangereux | 20 |
+
+Les résultats correspondent aux références à l'arrondi affiché près.
+Ces tests valident l'intégration application → API → CNN, pas la
+performance globale du modèle.
+
+Après un redémarrage du Mac, l'API a répondu 503 alors que le modèle
+était toujours présent dans MLflow. Un redémarrage du Deployment API,
+une fois MLflow disponible, a rétabli le chargement du CNN.
+
+L'exécution sur Apple Silicon reste à vérifier.
 Prefect n'est pas inclus dans ce déploiement.
+La publication multiarchitecture de l'image web app reste à valider.
