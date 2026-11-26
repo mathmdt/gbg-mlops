@@ -38,6 +38,32 @@ app donne 0,188 sur un trajet sûr (13 fenêtres, non dangereux) et 0,948 sur un
 imprudent (20 fenêtres, dangereux), soit les scores de référence du CNN à l'arrondi près.
 Détails dans [`infra/k8s/README.md`](infra/k8s/README.md).
 
+## Expérimentations et registre MLflow
+
+Le suivi des entraînements, l'ablation et la sélection du modèle champion sont tracés sous l'expérience MLflow `gbg-risk`.
+
+### 1. Comparaison des variantes testées
+Plusieurs architectures et stratégies de pondération ont été évaluées pour traiter le déséquilibre des classes :
+- **Sans pondération (`pos_weight = 1.0`)** : le modèle s'effondre avec un ROC-AUC de 0,33 car il prédit la classe majoritaire.
+- **Avec pondération automatique (`pos_weight ~ 70`)** : le modèle apprend efficacement à discriminer les comportements à risque.
+
+![Tableau comparatif des runs](docs/images/mlflow_runs_table.png)
+
+### 2. Métriques comparatives et courbes d'apprentissage
+Le modèle final (`cnn1d-final-full-data`) dépasse nettement toutes les baselines avec un **ROC-AUC de 0,9005** et une convergence stable de la perte d'entraînement.
+
+![Graphiques comparatifs MLflow](docs/images/mlflow_comparison_charts.png)
+
+### 3. Fiche d'identité du run champion
+Traçabilité complète du modèle retenu : hash du commit Git (`46744b6`), empreinte du split des données (`data_split`) et métriques de validation associées.
+
+![Détail du run champion](docs/images/mlflow_champion_overview.png)
+
+### 4. Registre de modèles (Model Registry)
+Gestion du cycle de vie sous `gbg-risk` : la version 8 a été promue avec l'alias officiel **`@champion`** pour être chargée automatiquement par l'API FastAPI et le cluster Kubernetes.
+
+![MLflow Model Registry](docs/images/mlflow_model_registry.png)
+
 ## Architecture
 
 ```mermaid
